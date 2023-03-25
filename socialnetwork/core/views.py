@@ -4,15 +4,42 @@ from django.contrib import messages
 from django.contrib.auth.models import User,auth
 from .forms import SignupForm
 from django.contrib.auth.decorators import login_required
-from . models import Profile
+from . models import Profile,Post,Like
 
 @login_required(login_url='signin')  #for security
 def index(request):
-    return render(request,'index.html')
+#    user_obj=User.objects.get(username=request.user.username)
+    profile_user=Profile.objects.get(user=request.user)
+
+    posts=Post.objects.all()
+    return render(request,'index.html',{'profile_user':profile_user , 'posts':posts})
 
 @login_required(login_url='signin')  #for security
 def setting(request):
     profile_user=Profile.objects.get(user=request.user)
+    if request.method=="POST":
+        if request.FILES.get("profile_pic") == None:
+            profile_pic=profile_user.profile_pic
+            bio=request.POST['bio']
+            location=request.POST['location']
+
+            profile_user.profile_pic=profile_pic
+            profile_user.bio=bio
+            profile_user.location=location
+            profile_user.save()
+
+        else:
+            profile_pic=request.FILES.get('profile_pic')
+            bio = request.POST['bio']
+            location = request.POST['location']
+
+            profile_user.profile_pic = profile_pic
+            profile_user.bio = bio
+            profile_user.location = location
+            profile_user.save()
+
+            return redirect('setting')
+
     return render(request,'setting.html',{'profile_user':profile_user})
 
 
@@ -40,7 +67,7 @@ def signup(request):
                 user_model=User.objects.get(username=username)  #set username as defult in profile
                 new_profile=Profile.objects.create(user=user_model)
                 new_profile.save()
-                return redirect('settings')
+                return redirect('setting')
         else:
             messages.info(request,'passwprd not match')
             return redirect('signup')
@@ -76,4 +103,58 @@ def signin(request):
 def logout(request):
     auth.logout(request)
     return redirect("signin")
+
+
+@login_required(login_url='signin')  #for security
+def upload(request):
+    if request.method=="POST":
+        user=request.user.username
+        image=request.FILES.get('image_upload')
+        caption=request.POST['caption']
+
+        upload_post=Post.objects.create(user=user,postimg=image,caption=caption)
+        upload_post.save()
+
+        return redirect('/')
+    else:
+        return redirect('/')
+
+
+@login_required(login_url='signin')  #for security
+def likepost(request):
+    username=request.user.username
+    post_id=request.GET.get('post_id')
+
+    post=Post.objects.get(id=post_id)
+
+    like_filter=Like.objects.filter(post_id=post_id,username=username).first()
+
+    print(like_filter)
+    if like_filter == None:
+        new_like=Like.objects.create(post_id=post_id,username=username)
+        new_like.save()
+
+        post.likes =post.likes+1
+        post.save()
+        return redirect('/')
+    else:
+        like_filter.delete()
+        post.likes = post.likes-1
+        post.save()
+        return redirect('/')
+
+
+def profile(request,pk):
+    user_obj=User.objects.get(username=pk)
+    user_profile=Profile.objects.get(user=user_obj)
+    user_post=Post.objects.filter(user=pk)
+    user_post_len=len(user_post)
+
+    context={
+        'user_obj':user_obj,
+        'user_profile':user_profile,
+        'user_post':user_post,
+        'user_post_len':user_post_len,
+    }
+    return render(request,'profile.html',context)
 
